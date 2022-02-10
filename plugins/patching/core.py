@@ -4,6 +4,7 @@ import collections
 
 import ida_ua
 import ida_auto
+import ida_nalt
 import ida_bytes
 import ida_lines
 import ida_idaapi
@@ -45,8 +46,6 @@ class PatchingCore(object):
         # IDA UI Hooks
         self._ui_hooks = UIHooks()
         self._ui_hooks.ready_to_run = self.load
-        self._ui_hooks.populating_widget_popup = self._populating_widget_popup
-        self._ui_hooks.get_lines_rendering_info = self._highlight_lines
         self._ui_hooks.hook()
 
         # IDA 'Processor' Hooks
@@ -132,6 +131,10 @@ class PatchingCore(object):
         if not self.assembler:
             self._ui_hooks.unhook()
             return
+
+        # enable additional hooks since the plugin is going live
+        self._ui_hooks.populating_widget_popup = self._populating_widget_popup
+        self._ui_hooks.get_lines_rendering_info = self._highlight_lines
 
         # finish loading the plugin and integrating its UI elements / actions
         self._init_actions()

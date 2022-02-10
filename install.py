@@ -119,10 +119,10 @@ def install_plugin():
         #
         # even if the plugin is not in use, the Keystone DLL / lib will be
         # loaded into memory by nature of Python imports. we are going to
-        # try and AGGRESSIVELY unload it such that we can ovewrite it
+        # try and AGGRESSIVELY unload it such that we can overwrite it
         #
         # because this is pretty dangerous, we set this flag to ensure the
-        # patching plugin is completeley neutured and cannot be used in any
+        # patching plugin is completeley neutered and cannot be used in any
         # form until IDA is restarted
         #
 
@@ -134,7 +134,7 @@ def install_plugin():
             print("[!] Please ensure no other instance of IDA are running and try again...")
             return False
 
-        # remove the rest of the plugin only IF removing Keystone succedded
+        # remove the rest of the plugin only IF removing Keystone succeeded
         shutil.rmtree(patching_directory)
 
     #
@@ -165,6 +165,11 @@ def install_plugin():
     # load the plugin if this was a fresh install
     plugin_path = os.path.join(plugins_directory, 'patching.py')
     ida_loader.load_plugin(plugin_path)
+
+    # if a database appears open, force plugin core to load immediately
+    if ida_loader.get_path(ida_loader.PATH_TYPE_IDB):
+        IDA_GLOBAL_SCOPE.patching.core.load()
+
     return True
 
 def remove_keystone(keystone_directory):
