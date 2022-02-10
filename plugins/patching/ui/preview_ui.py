@@ -91,7 +91,7 @@ class PatchingDockable(ida_kernwin.PluginForm):
         self._edit_timer.setSingleShot(True)
         self._edit_timer.timeout.connect(self._edit_stopped)
 
-        if ida_name.get_nlist_size() > 20_000:
+        if ida_name.get_nlist_size() > 20000:
             self._line_assembly.textEdited.connect(self._edit_started)
         else:
             self._line_assembly.textEdited.connect(self.controller.edit_assembly)
