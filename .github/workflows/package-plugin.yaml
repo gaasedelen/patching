@@ -1,0 +1,36 @@
+name: Package IDA Plugin 📦
+
+on: push
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Download workflow artifact
+      uses: dawidd6/action-download-artifact@v2.16.0
+      with:
+
+        # the target repo for external artifacts (built libs)
+        repo: gaasedelen/keystone
+        branch: master
+
+        # token to fetch artifacts from the repo
+        github_token: ${{secrets.KEYSTONE_PATCHING_TOKEN}}
+
+        # which workflow to search for artifacts
+        workflow: python-publish.yml
+        workflow_conclusion: success
+
+    - name: Package distributions
+      shell: bash
+      run: |
+        mkdir dist && cd dist
+        mkdir win32 && cp -r ../plugins/* ./win32/ && cp -r ../artifact/keystone_win32/* ./win32/patching/keystone && cd ./win32 && zip -r ../patching_win32.zip ./* && cd ..
+        mkdir linux && cp -r ../plugins/* ./linux/ && cp -r ../artifact/keystone_linux/* ./linux/patching/keystone && cd ./linux && zip -r ../patching_linux.zip ./* && cd ..
+        mkdir darwin && cp -r ../plugins/* ./darwin/ && cp -r ../artifact/keystone_darwin/* ./darwin/patching/keystone && cd ./darwin && zip -r ../patching_macos.zip ./* && cd ..
+
+    - uses: actions/upload-artifact@v2
+      with:
+         path: ${{ github.workspace }}/dist/*.zip
