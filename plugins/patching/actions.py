@@ -110,7 +110,7 @@ class ForceJumpAction(ida_kernwin.action_handler_t):
 class AssembleAction(ida_kernwin.action_handler_t):
     NAME = 'patching:assemble'
     ICON = 'assemble.png'
-    TEXT = "Assemble..."
+    TEXT = "~A~ssemble..."
     TOOLTIP = "Assemble new instructions at the selected address"
     HOTKEY = None
 
@@ -135,7 +135,7 @@ class AssembleAction(ida_kernwin.action_handler_t):
 class ApplyAction(ida_kernwin.action_handler_t):
     NAME = 'patching:apply'
     ICON = 'save.png'
-    TEXT = "Apply patches to..."
+    TEXT = "A~p~ply patches to..."
     TOOLTIP = "Select where to save the patched binary"
     HOTKEY = None
 
