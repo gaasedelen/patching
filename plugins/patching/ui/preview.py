@@ -65,7 +65,7 @@ class PatchingController(object):
         insn, lineno = self.get_insn_lineno(ea)
 
         # if the target instruction does not exist
-        if insn.address != ea:
+        if insn.address != ea or insn == None:
             idx = LAST_LINE_IDX
 
         #
