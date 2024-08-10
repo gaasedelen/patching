@@ -444,13 +444,13 @@ class AsmX86(KeystoneAssembler):
         'REPE CMPSW',
     ]
 
-    def __init__(self, inf):
+    def __init__(self):
         arch = keystone.KS_ARCH_X86
 
-        if inf.is_64bit():
+        if ida_ida.inf_is_64bit():
             mode = keystone.KS_MODE_64
             self.MAX_PREVIEW_BYTES = 7
-        elif inf.is_32bit():
+        elif ida_ida.inf_is_32bit_exactly():
             mode = keystone.KS_MODE_32
             self.MAX_PREVIEW_BYTES = 6
         else:
@@ -644,13 +644,13 @@ class AsmARM(KeystoneAssembler):
         # TODO: MRS and MOV (32/64 bit) are semi-supported too
     ]
 
-    def __init__(self, inf):
+    def __init__(self):
 
         # ARM64
-        if inf.is_64bit():
+        if ida_ida.inf_is_64bit():
             arch = keystone.KS_ARCH_ARM64
 
-            if inf.is_be():
+            if ida_ida.inf_is_be():
                 mode = keystone.KS_MODE_BIG_ENDIAN
             else:
                 mode = keystone.KS_MODE_LITTLE_ENDIAN

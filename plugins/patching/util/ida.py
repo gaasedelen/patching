@@ -10,7 +10,7 @@ import ida_name
 import ida_bytes
 import ida_lines
 import ida_idaapi
-import ida_struct
+import ida_typeinf
 import ida_kernwin
 import ida_segment
 
@@ -339,29 +339,37 @@ def resolve_symbol(from_ea, name):
 
             # get the struct info for the resolved global address
             sid = ida_nalt.get_strid(global_ea)
-            sptr = ida_struct.get_struc(sid)
+            tif = ida_typeinf.tinfo_t()
 
-            #
-            # walk through the rest of the struct path to compute the offset (and
-            # final address) of the referenced field eg. global.foo.bar
-            #
+            if tif.get_type_by_tid(sid):
 
-            offset = 0
-            while struct_path and sptr != None:
+                #
+                # walk through the rest of the struct path to compute the offset (and
+                # final address) of the referenced field eg. global.foo.bar
+                #
 
-                member_name, sep, struct_path = struct_path.partition('.')
-                member = ida_struct.get_member_by_name(sptr, member_name)
+                offset = 0
+                while struct_path and tif.is_struct():
+                    member_name, sep, struct_path = struct_path.partition('.')
 
-                if member is None:
-                    print(" - INVALID STRUCT MEMBER!", member_name)
-                    break
+                    stkvar = ida_typeinf.udm_t()
+                    stkvar.name = member_name
+                    stkvar_idx = tif.find_udm(stkvar, ida_typeinf.STRMEM_NAME)
 
-                offset += member.get_soff()
-                sptr = ida_struct.get_sptr(member)
-                if not sptr:
-                    assert not('.' in struct_path), 'Expected end of struct path?'
-                    yield (global_ea+offset, name)
-                    resolved_paths += 1
+                    if stkvar_idx < 0:
+                        print(" - INVALID STRUCT MEMBER!", member_name)
+                        break
+
+                    offset += int(stkvar.offset / 8)
+
+                    tif = stkvar.type.copy()
+                    if tif.is_array():
+                        tif = tif.get_final_element()
+
+                    if not tif.is_struct():
+                        assert not('.' in struct_path), 'Expected end of struct path?'
+                        yield (global_ea+offset, name)
+                        resolved_paths += 1
 
         #
         # TODO/XXX: if we yielded at least one struct path... we're *probably*

@@ -167,13 +167,12 @@ class PatchingCore(object):
         """
         Initialize the assembly engine to be used for patching.
         """
-        inf = ida_idaapi.get_inf_structure()
-        arch_name = inf.procname.lower()
+        arch_name = ida_ida.inf_get_procname()
 
         if arch_name == 'metapc':
-            assembler = AsmX86(inf)
+            assembler = AsmX86()
         elif arch_name.startswith('arm'):
-            assembler = AsmARM(inf)
+            assembler = AsmARM()
 
         #
         # TODO: disabled until v0.2.0
@@ -1213,8 +1212,7 @@ class PatchingCore(object):
 
         percent_truncated = percent[:percent.index('.')+3] # truncate! don't round this float...
 
-        inf = ida_idaapi.get_inf_structure()
-        arch_name = inf.procname.lower()
+        arch_name = ida_ida.inf_get_procname()
 
         total_failed = total - good
         unknown_fails = total_failed - unsupported
