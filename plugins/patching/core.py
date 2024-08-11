@@ -171,7 +171,7 @@ class PatchingCore(object):
 
         if arch_name == 'metapc':
             assembler = AsmX86()
-        elif arch_name.startswith('arm'):
+        elif arch_name.startswith('arm') or arch_name.startswith('ARM'):
             assembler = AsmARM()
 
         #
