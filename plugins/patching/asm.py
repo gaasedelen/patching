@@ -3,6 +3,7 @@ import ida_idp
 import ida_nalt
 import ida_lines
 import ida_segregs
+import ida_pro
 
 from patching.util.ida import *
 import patching.keystone as keystone
@@ -446,16 +447,25 @@ class AsmX86(KeystoneAssembler):
 
     def __init__(self, inf):
         arch = keystone.KS_ARCH_X86
-
-        if inf.is_64bit():
-            mode = keystone.KS_MODE_64
-            self.MAX_PREVIEW_BYTES = 7
-        elif inf.is_32bit():
-            mode = keystone.KS_MODE_32
-            self.MAX_PREVIEW_BYTES = 6
+        
+        if ida_pro.IDA_SDK_VERSION < 900:
+            if inf.is_64bit():
+                mode = keystone.KS_MODE_64
+                self.MAX_PREVIEW_BYTES = 7
+            elif inf.is_32bit():
+                mode = keystone.KS_MODE_32
+                self.MAX_PREVIEW_BYTES = 6
+            else:
+                mode = keystone.KS_MODE_16
         else:
-            mode = keystone.KS_MODE_16
-
+            if ida_ida.inf_is_64bit():
+                mode = keystone.KS_MODE_64
+                self.MAX_PREVIEW_BYTES = 7
+            elif ida_ida.inf_is_64bit():
+                mode = keystone.KS_MODE_32
+                self.MAX_PREVIEW_BYTES = 6
+            else:
+                mode = keystone.KS_MODE_16            
         # initialize keystone-based assembler
         super(AsmX86, self).__init__(arch, mode)
 

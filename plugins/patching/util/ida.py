@@ -10,9 +10,13 @@ import ida_name
 import ida_bytes
 import ida_lines
 import ida_idaapi
-import ida_struct
 import ida_kernwin
 import ida_segment
+import ida_pro
+import ida_typeinf
+
+if ida_pro.IDA_SDK_VERSION < 900:
+    import ida_struct
 
 from .qt import *
 from .python import swap_value
@@ -339,8 +343,13 @@ def resolve_symbol(from_ea, name):
 
             # get the struct info for the resolved global address
             sid = ida_nalt.get_strid(global_ea)
-            sptr = ida_struct.get_struc(sid)
-
+            
+            if ida_pro.IDA_SDK_VERSION < 900:
+                sptr = ida_struct.get_struc(sid)
+            else:
+                tif = ida_typeinf.tinfo_t()
+                sptr = tif.get_type_by_tid(sid)   
+                         
             #
             # walk through the rest of the struct path to compute the offset (and
             # final address) of the referenced field eg. global.foo.bar
@@ -350,14 +359,23 @@ def resolve_symbol(from_ea, name):
             while struct_path and sptr != None:
 
                 member_name, sep, struct_path = struct_path.partition('.')
-                member = ida_struct.get_member_by_name(sptr, member_name)
+                if ida_pro.IDA_SDK_VERSION < 900:
+                    member = ida_struct.get_member_by_name(sptr, member_name)
+                else:
+                    udm = ida_typeinf.udm_t()
+                    udm.name = member_name
+                    member = tif.find_udm(udm, ida_typeinf.STRMEM_NAME)
 
                 if member is None:
                     print(" - INVALID STRUCT MEMBER!", member_name)
                     break
+                if ida_pro.IDA_SDK_VERSION < 900:
+                    offset += member.get_soff()
+                    sptr = ida_struct.get_sptr(member)
+                else:
+                    offset += udm.offset
+                    sptr = tif.find_udm(udm, ida_typeinf.STRMEM_AUTO)
 
-                offset += member.get_soff()
-                sptr = ida_struct.get_sptr(member)
                 if not sptr:
                     assert not('.' in struct_path), 'Expected end of struct path?'
                     yield (global_ea+offset, name)

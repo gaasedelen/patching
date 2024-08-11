@@ -12,6 +12,7 @@ import ida_loader
 import ida_kernwin
 import ida_segment
 import idautils
+import ida_pro
 
 from patching.asm import *
 from patching.actions import *
@@ -167,8 +168,13 @@ class PatchingCore(object):
         """
         Initialize the assembly engine to be used for patching.
         """
-        inf = ida_idaapi.get_inf_structure()
-        arch_name = inf.procname.lower()
+        # Update for IDA 9.0
+        if ida_pro.IDA_SDK_VERSION < 900:
+            inf = ida_idaapi.get_inf_structure()
+            arch_name = inf.procname.lower()
+        else:
+            inf = ida_ida.inf_get_procname()
+            arch_name = inf.lower()    
 
         if arch_name == 'metapc':
             assembler = AsmX86(inf)
@@ -1212,9 +1218,13 @@ class PatchingCore(object):
             percent = "100.0"
 
         percent_truncated = percent[:percent.index('.')+3] # truncate! don't round this float...
-
-        inf = ida_idaapi.get_inf_structure()
-        arch_name = inf.procname.lower()
+        
+        if ida_pro.IDA_SDK_VERSION < 900:
+            inf = ida_idaapi.get_inf_structure()
+            arch_name = inf.procname.lower()
+        else:
+            inf = ida_ida.inf_get_procname()
+            arch_name = inf.lower()
 
         total_failed = total - good
         unknown_fails = total_failed - unsupported
