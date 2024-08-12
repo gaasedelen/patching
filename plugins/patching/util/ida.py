@@ -10,9 +10,9 @@ import ida_name
 import ida_bytes
 import ida_lines
 import ida_idaapi
-import ida_typeinf
 import ida_kernwin
 import ida_segment
+import idc
 
 from .qt import *
 from .python import swap_value
@@ -339,37 +339,26 @@ def resolve_symbol(from_ea, name):
 
             # get the struct info for the resolved global address
             sid = ida_nalt.get_strid(global_ea)
-            tif = ida_typeinf.tinfo_t()
 
-            if tif.get_type_by_tid(sid):
+            offset = 0
+            while struct_path and sid != -1:
+                member_name, sep, struct_path = struct_path.partition('.')
+                member_offset = idc.get_member_offset(sid, member_name)
 
-                #
-                # walk through the rest of the struct path to compute the offset (and
-                # final address) of the referenced field eg. global.foo.bar
-                #
+                if member_offset == -1:
+                    print(" - INVALID STRUCT MEMBER!", member_name)
+                    break
 
-                offset = 0
-                while struct_path and tif.is_struct():
-                    member_name, sep, struct_path = struct_path.partition('.')
+                offset += member_offset
+                sid = idc.get_member_strid(sid, member_offset)
 
-                    stkvar = ida_typeinf.udm_t()
-                    stkvar.name = member_name
-                    stkvar_idx = tif.find_udm(stkvar, ida_typeinf.STRMEM_NAME)
-
-                    if stkvar_idx < 0:
-                        print(" - INVALID STRUCT MEMBER!", member_name)
-                        break
-
-                    offset += int(stkvar.offset / 8)
-
-                    tif = stkvar.type.copy()
-                    if tif.is_array():
-                        tif = tif.get_final_element()
-
-                    if not tif.is_struct():
-                        assert not('.' in struct_path), 'Expected end of struct path?'
-                        yield (global_ea+offset, name)
-                        resolved_paths += 1
+                # The idc.get_member_strid function in IDA 9.0 beta has a bug.
+                # Even if a member is not a structure, it does not return -1.
+                # Therefore, it's necessary to use struct_path to determine whether the retrieval is complete.
+                if not struct_path or sid == -1:
+                    assert not('.' in struct_path), 'Expected end of struct path?'
+                    yield (global_ea+offset, name)
+                    resolved_paths += 1
 
         #
         # TODO/XXX: if we yielded at least one struct path... we're *probably*
