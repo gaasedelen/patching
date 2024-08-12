@@ -941,21 +941,87 @@ class PatchingCore(object):
         IDA is drawing disassembly lines and requesting highlighting info.
         """
 
+        # if there are no patches, there is nothing to highlight
+        if not self.patched_addresses:
+            return
+
         # ignore line highlight events that are not for a disassembly view
         if ida_kernwin.get_widget_type(widget) != ida_kernwin.BWN_DISASM:
             return
+
+        # cache item heads that have been checked for patches
+        ignore_item_ea = set()
+        highlight_item_ea = set()
 
         # highlight lines/addresses that have been patched by the user
         for section_lines in rin.sections_lines:
             for line in section_lines:
                 line_ea = line.at.toea()
+
+                #
+                # fast path to ignore entire items that have not been patched
+                # but may span multiple lines in the disassembly view
+                #
+
+                item_head = ida_bytes.get_item_head(line_ea)
+                if item_head in ignore_item_ea:
+                    continue
+
+                #
+                # this is a fast-path to avoid having to re-check an entire
+                # item if the current line address has already been checked
+                # and determined to contain an applied patch.
+                #
+
+                if line_ea in highlight_item_ea:
+
+                    # highlight the line if it is patched in some way
+                    e = ida_kernwin.line_rendering_output_entry_t(line)
+                    e.bg_color = ida_kernwin.CK_EXTRA2
+                    e.flags = ida_kernwin.LROEF_FULL_LINE
+
+                    # save the highlight to the output line highlight list
+                    out.entries.push_back(e)
+                    continue
+
+                #
+                # for lines of IDA disas that normally have a small number of
+                # backing bytes (such as an instruction or simple data item)
+                # we explode it out to its individual addresses and use sets
+                # to check if any bytes within it have been patched
+                #
+                # this scales well to an infinite number of patched bytes
+                #
+
                 item_len = ida_bytes.get_item_size(line_ea)
+                end_ea = line_ea + item_len
 
-                # explode a line / instruction into individual addresses
-                line_addresses = set(range(line_ea, line_ea+item_len))
+                if item_len <= 256:
+                    line_addresses = set(range(line_ea, end_ea))
+                    if not(line_addresses & self.patched_addresses):
+                        ignore_item_ea.add(line_ea)
+                        continue
 
-                # if no patched bytes correspond to this line / instruction
-                if not(line_addresses & self.patched_addresses):
+                #
+                # for lines with items that are reportedly quite 'large' (maybe
+                # a struct, array, alignment directive, etc.) where a line may
+                # contribute to an item that's tens of thousands of bytes...
+                #
+                # we will instead loop through all of the patched addresses
+                # to see if any of them fall within the range of the line.
+                #
+                # it seems unlikely that the user will ever have very many
+                # patched bytes (maybe hundreds?) versus generating a large
+                # set and checking potentially tens of thousands of addresses
+                # that make up an item, like the above condition would
+                #
+                # NOTE: this was a added during a slight re-factor of this
+                # function / logic to help minimize the chance of notable lag
+                # when scrolling past large data structures in the disas view
+                #
+
+                elif not any(line_ea <= ea < end_ea for ea in self.patched_addresses):
+                    ignore_item_ea.add(line_ea)
                     continue
 
                 # highlight the line if it is patched in some way
@@ -965,6 +1031,7 @@ class PatchingCore(object):
 
                 # save the highlight to the output line highlight list
                 out.entries.push_back(e)
+                highlight_item_ea.add(line_ea)
 
     def _ida_undo_occurred(self, action_name, is_undo):
         """
@@ -1202,7 +1269,7 @@ class PatchingCore(object):
             print("-"*50)
             print("(KNOWN) Unsupported Mnemonics")
             print("-"*50)
-            
+
             for mnem, hits in unsupported_map.items():
                 print(" - %s - hits %u" % (mnem.ljust(10), hits))
 
