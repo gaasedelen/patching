@@ -816,7 +816,45 @@ def read_range_selection(ctx):
         # return the range of selected lines
         return (True, start_ea, end_ea)
 
-    # normal IDA view
+    # special tweak for IDA disassembly views
+    elif ida_kernwin.get_widget_type(ctx.widget) == ida_kernwin.BWN_DISASM:
+
+        # extract the start/end cursor locations within the IDA disas view
+        p0 = ida_kernwin.twinpos_t()
+        p1 = ida_kernwin.twinpos_t()
+
+        #
+        # this is where we do a special override such that a user can select a
+        # few characters on a single instruction / line .. and we will return
+        # the 'range' of just that single instruction
+        #
+        # with a few characters selected / highlighted, IDA will return True
+        # to the read_selection() call below
+        #
+
+        if ida_kernwin.read_selection(ctx.widget, p0, p1):
+            start_ea = p0.at.toea()
+            end_ea = p1.at.toea()
+
+            #
+            # if the start and end address are the same with a successful
+            # selection read, that means the user's selection is on a single
+            # line / instruction
+            #
+            # we will calculate an appropriate 'end_ea' ourselves to capture
+            # the length of the entire instruction and return this as our own
+            # custom / mini range selection
+            #
+            # this facilitates the ability for users to reverst individual
+            # instructions within a patch by selecting a few characters of
+            # the instruction in question
+            #
+
+            if start_ea == end_ea:
+                end_ea = ida_bytes.get_item_end(end_ea)
+                return (True, start_ea, end_ea)
+
+    # any other IDA widget / viewer
     return ida_kernwin.read_range_selection(ctx.widget)
 
 def remove_ida_actions(popup):
