@@ -12,7 +12,6 @@ import ida_lines
 import ida_idaapi
 import ida_kernwin
 import ida_segment
-import idc
 
 from .qt import *
 from .python import swap_value
@@ -300,6 +299,9 @@ def resolve_symbol(from_ea, name):
     but the point still stands: a function like this has to be able to return
     'multiple' potential values)
     """
+
+    # XXX: deferred import to avoid breaking patching.reload() dev helper
+    import idc
 
     #
     # first, we will attempt to parse the given symbol as a global
