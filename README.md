@@ -1,4 +1,4 @@
-# Patching - Interactive Binary Patching for IDA Pro
+# Patching - Interactive Binary Patching for IDA Pro - IDA 9 Fix Edition
 
 <p align="center"><img alt="Patching Plugin" src="screenshots/title.png"/></p>
 
@@ -12,11 +12,11 @@ Special thanks to [Hex-Rays](https://hex-rays.com/) for supporting the developme
 
 ## Releases
 
-* v0.1 -- Initial release
+* v0.1 -- Initial release - IDA9 Fix by Ryoma7
 
 # Installation
 
-This plugin requires IDA 7.6 and Python 3. It supports Windows, Linux, and macOS.
+This plugin requires IDA 9 and Python 3. It supports Windows, Linux, and macOS.
 
 ## Easy Install
 

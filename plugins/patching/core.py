@@ -2,6 +2,7 @@ import shutil
 import hashlib
 import collections
 
+import ida_ida
 import ida_ua
 import ida_auto
 import ida_nalt
@@ -20,6 +21,9 @@ from patching.exceptions import *
 from patching.util.ida import *
 from patching.util.misc import plugin_resource
 from patching.util.python import register_callback, notify_callback
+
+import idc
+
 
 #------------------------------------------------------------------------------
 # Plugin Core
@@ -167,13 +171,13 @@ class PatchingCore(object):
         """
         Initialize the assembly engine to be used for patching.
         """
-        inf = ida_idaapi.get_inf_structure()
-        arch_name = inf.procname.lower()
 
+        arch_name = ida_ida.inf_get_procname().lower()
+        print(arch_name)
         if arch_name == 'metapc':
-            assembler = AsmX86(inf)
+            assembler = AsmX86()
         elif arch_name.startswith('arm'):
-            assembler = AsmARM(inf)
+            assembler = AsmARM()
 
         #
         # TODO: disabled until v0.2.0
