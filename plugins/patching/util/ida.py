@@ -10,9 +10,9 @@ import ida_name
 import ida_bytes
 import ida_lines
 import ida_idaapi
-import ida_struct
 import ida_kernwin
 import ida_segment
+import idc
 
 from .qt import *
 from .python import swap_value
@@ -287,7 +287,9 @@ def resolve_symbol(from_ea, name):
     a second func could be named '.X_' which will also appear as '_X_'
 
     while this is maybe okay in the context of IDA (where it has concrete
-    instruction / address info) ... it is not okay for trying to 'resolve'
+    instruct
+
+    ion / address info) ... it is not okay for trying to 'resolve'
     a symbol when your only information is assembly text.
 
     if the user types in the following instruction:
@@ -339,7 +341,7 @@ def resolve_symbol(from_ea, name):
 
             # get the struct info for the resolved global address
             sid = ida_nalt.get_strid(global_ea)
-            sptr = ida_struct.get_struc(sid)
+            sptr = idc.get_struc_id(sid)
 
             #
             # walk through the rest of the struct path to compute the offset (and
@@ -350,14 +352,14 @@ def resolve_symbol(from_ea, name):
             while struct_path and sptr != None:
 
                 member_name, sep, struct_path = struct_path.partition('.')
-                member = ida_struct.get_member_by_name(sptr, member_name)
+                member = idc.get_member_name(sptr, member_name)
 
                 if member is None:
                     print(" - INVALID STRUCT MEMBER!", member_name)
                     break
 
                 offset += member.get_soff()
-                sptr = ida_struct.get_sptr(member)
+                sptr = idc.get_sptr(member)
                 if not sptr:
                     assert not('.' in struct_path), 'Expected end of struct path?'
                     yield (global_ea+offset, name)
