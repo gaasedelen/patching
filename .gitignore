@@ -139,4 +139,3 @@ dmypy.json
 
 # ida test suite
 samples/*
-plugins/patching/keystone/*
