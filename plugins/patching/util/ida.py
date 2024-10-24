@@ -90,12 +90,17 @@ def apply_patches(filepath):
         # routine that has simply been reverse engineered
         #
 
+
+
         def visitor(ea, file_offset, original_value, patched_value):
 
             # the patched byte does not have a know file address
             if file_offset == ida_idaapi.BADADDR:
                 print("%08X: has no file mapping (original: %02X patched: %02X)...skipping...\n" % (ea, original_value, patched_value))
                 return 0
+
+            # print(f"debug: file path: {filepath}")
+            # print(f"debug: offset needs patched : {file_offset}")
 
             # seek to the patch location
             f.seek(file_offset)
@@ -125,11 +130,13 @@ def apply_patches(filepath):
 
             return 0
 
+
         #
         # RUN THE VISITOR / APPLY PATCHES
         #
 
         ida_bytes.visit_patched_bytes(0, ida_idaapi.BADADDR, visitor)
+
 
         #
         # all done, file will close as we leave this 'with' scoping
