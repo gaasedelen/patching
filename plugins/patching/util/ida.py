@@ -153,6 +153,13 @@ def attach_submenu_to_popup(popup_handle, submenu_name, prev_action_name):
     if not QT_AVAILABLE:
         return None
 
+    # 
+    # convert IDA alt shortcut syntax to whatever they use in Qt Text menus
+    # eg: '~A~ssemble patches to...' --> '&Assemble patches to...'
+    #
+
+    prev_action_name = re.sub(r'~(.)~', r'&\1', prev_action_name)
+
     # cast an IDA 'popup handle' pointer back to a QMenu object
     p_qmenu = ctypes.cast(int(popup_handle), ctypes.POINTER(ctypes.c_void_p))[0]
     qmenu = sip.wrapinstance(int(p_qmenu), QtWidgets.QMenu)
