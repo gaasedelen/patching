@@ -827,6 +827,10 @@ def read_range_selection(ctx):
 
     # special tweak for IDA disassembly views
     elif ida_kernwin.get_widget_type(ctx.widget) == ida_kernwin.BWN_DISASM:
+        
+        # no active selection in the patching view, nothing to do...
+        if not(ctx.cur_flags & ida_kernwin.ACF_HAS_SELECTION):
+            return (False, ida_idaapi.BADADDR, ida_idaapi.BADADDR)
 
         # extract the start/end cursor locations within the IDA disas view
         p0 = ida_kernwin.twinpos_t()
@@ -854,7 +858,7 @@ def read_range_selection(ctx):
             # the length of the entire instruction and return this as our own
             # custom / mini range selection
             #
-            # this facilitates the ability for users to reverst individual
+            # this facilitates the ability for users to revert individual
             # instructions within a patch by selecting a few characters of
             # the instruction in question
             #
