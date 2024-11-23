@@ -9,7 +9,7 @@ jobs:
     - uses: actions/checkout@v2
 
     - name: Download workflow artifact
-      uses: dawidd6/action-download-artifact@v2.16.0
+      uses: dawidd6/action-download-artifact@v6
       with:
 
         # the target repo for external artifacts (built libs)
@@ -31,6 +31,6 @@ jobs:
         mkdir linux && cp -r ../plugins/* ./linux/ && cp -r ../artifact/keystone_linux/* ./linux/patching/keystone && cd ./linux && zip -r ../patching_linux.zip ./* && cd ..
         mkdir darwin && cp -r ../plugins/* ./darwin/ && cp -r ../artifact/keystone_darwin/* ./darwin/patching/keystone && cd ./darwin && zip -r ../patching_macos.zip ./* && cd ..
 
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v4
       with:
          path: ${{ github.workspace }}/dist/*.zip
