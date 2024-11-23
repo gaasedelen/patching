@@ -54,18 +54,10 @@ class PatchingCore(object):
 
         # IDA 'Database' Hooks
         self._idb_hooks = IDBHooks()
-        self._idb_hooks.auto_empty_finally = self.load
-
-        #
-        # the plugin only uses IDB hooks for IDA Batch mode. specifically, it
-        # will load the plugin when the initial auto analysis has finished
-        #
-        # TODO: does auto_empty_finally trigger if you are loading a
-        # pre-existing IDB in IDA batch mode? (probably not, hence TODO)
-        #
-
         if ida_kernwin.cvar.batch:
-            self._idb_hooks.hook()
+            self._idb_hooks.auto_empty_finally = self.load
+        self._idb_hooks.byte_patched = self._ida_byte_patched
+        self._idb_hooks.hook()
 
         # the backing engine to assemble instructions for the plugin
         self.assembler = None
@@ -88,6 +80,7 @@ class PatchingCore(object):
 
         # plugin events / callbacks
         self._patches_changed_callbacks = []
+        self._refresh_timer = None
 
         #
         # defer fully loading the plugin core until the IDB and UI itself
@@ -115,15 +108,6 @@ class PatchingCore(object):
         Load the plugin core.
         """
 
-        #
-        # IDB hooks are *only* ever used to load the patching plugin after
-        # initial auto-analysis completes in batch mode. so we should always
-        # unhook them here as they will not be used for anything else
-        #
-
-        if ida_kernwin.cvar.batch:
-            self._idb_hooks.unhook()
-
         # attempt to initialize an assembler engine matching the database
         self._init_assembler()
 
@@ -140,7 +124,6 @@ class PatchingCore(object):
         self._init_actions()
         self._idp_hooks.hook()
         self._refresh_patches()
-        ida_kernwin.refresh_idaview_anyway()
 
         print("[%s] Loaded v%s - (c) %s - %s" % (self.PLUGIN_NAME, self.PLUGIN_VERSION, self.PLUGIN_AUTHORS, self.PLUGIN_DATE))
 
@@ -158,6 +141,11 @@ class PatchingCore(object):
 
         print("[%s] Unloading v%s..." % (self.PLUGIN_NAME, self.PLUGIN_VERSION))
 
+        if self._refresh_timer:
+            ida_kernwin.unregister_timer(self._refresh_timer)
+            self._refresh_timer = None
+
+        self._idb_hooks.unhook()
         self._idp_hooks.unhook()
         self._ui_hooks.unhook()
         self._unregister_actions()
@@ -478,8 +466,15 @@ class PatchingCore(object):
                 self.nop_range(next_address, next_address+fill_size)
                 ida_auto.auto_make_code(next_address)
 
-        # write the actual patch data to the database
+        #
+        # write the actual patch data to the database. we also unhook the IDB
+        # events to prevent the plugin from seeing the numerous 'patch' events
+        # that IDA will generate as we write the patch data to the database
+        #
+
+        self._idb_hooks.unhook()
         ida_bytes.patch_bytes(ea, patch_data)
+        self._idb_hooks.hook()
 
         #
         # record the region of patched addresses
@@ -740,6 +735,14 @@ class PatchingCore(object):
         self.patched_addresses = addresses
         ida_kernwin.execute_sync(self._notify_patches_changed, ida_kernwin.MFF_NOWAIT|ida_kernwin.MFF_WRITE)
 
+    def __deferred_refresh_callback(self):
+        """
+        A deferred callback to refresh the list of patched addresses.
+        """
+        self._refresh_timer = None
+        self._refresh_patches()
+        return -1 # unregisters the timer
+
     #--------------------------------------------------------------------------
     # Plugin Events
     #--------------------------------------------------------------------------
@@ -772,6 +775,9 @@ class PatchingCore(object):
         #
 
         notify_callback(self._patches_changed_callbacks)
+
+        # ensure the IDA views are refreshed so highlights are updated
+        ida_kernwin.refresh_idaview_anyway()
 
         # for execute_sync(...)
         return 1
@@ -1045,6 +1051,27 @@ class PatchingCore(object):
 
         self._refresh_patches()
         return 0
+    
+    def _ida_byte_patched(self, ea, old_value):
+        """
+        IDA is reporting a byte has been patched.
+        """
+
+        #
+        # if a timer already exists, unregister it so that we can register a
+        # new one. this is to effectively resest the timer as patched bytes
+        # are coming in 'rapidly' (eg. externally scripted patches, etc)
+        #
+
+        if self._refresh_timer:
+            ida_kernwin.unregister_timer(self._refresh_timer)
+        
+        #
+        # register a timer to wait 200ms before doing a full reset of the
+        # patched addresses. this is to help 'batch' the changes
+        #
+
+        self._refresh_timer = ida_kernwin.register_timer(200, self.__deferred_refresh_callback)
 
     #--------------------------------------------------------------------------
     # Temp / DEV / Tests
@@ -1124,6 +1151,9 @@ class PatchingCore(object):
         fail_addrs = collections.defaultdict(list)
         fail_bytes = collections.defaultdict(set)
         alternates = set()
+
+        # unhook so the plugin doesn't try to handle a billion 'patch' events
+        self._idb_hooks.unhook()
 
         for ea in all_instruction_addresses(start):
 
@@ -1246,6 +1276,9 @@ class PatchingCore(object):
             asm_hex = ' '.join(['%02X' % x for x in asm_bytes])
             print(" - IDA: %s\n - ASM: %s" % (disas_hex, asm_hex))
             #break
+
+        # re-hook the to re-enable the plugin's ability to see patch events
+        self._idb_hooks.hook()
 
         print("-"*50)
         print("RESULTS")

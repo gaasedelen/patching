@@ -35,6 +35,8 @@ class IDPHooks(ida_idp.IDP_Hooks):
 class IDBHooks(ida_idp.IDB_Hooks):
     def auto_empty_finally(self):
         pass
+    def byte_patched(self, ea, value):
+        pass
 
 #------------------------------------------------------------------------------
 # IDA Misc
