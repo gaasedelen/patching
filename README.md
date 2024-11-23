@@ -12,6 +12,7 @@ Special thanks to [Hex-Rays](https://hex-rays.com/) for supporting the developme
 
 ## Releases
 
+* v0.2 -- Important bugfixes, IDA 9 compatibility
 * v0.1 -- Initial release
 
 # Installation

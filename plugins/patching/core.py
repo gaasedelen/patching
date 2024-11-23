@@ -37,7 +37,7 @@ from patching.util.python import register_callback, notify_callback
 class PatchingCore(object):
 
     PLUGIN_NAME    = 'Patching'
-    PLUGIN_VERSION = '0.2.0-DEV'
+    PLUGIN_VERSION = '0.2.0'
     PLUGIN_AUTHORS = 'Markus Gaasedelen'
     PLUGIN_DATE    = '2024'
 

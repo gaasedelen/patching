@@ -1,4 +1,3 @@
-import ida_nalt
 import ida_name
 import ida_bytes
 import ida_lines
@@ -228,7 +227,6 @@ class PatchingController(object):
         """
         instructions, current_address = [], self._address_origin
 
-        IMAGEBASE = ida_nalt.get_imagebase()
         PREV_INSTRUCTIONS = 50
         NEXT_INSTRUCTIONS = 50
         MAX_PREVIEW_BYTES = self.core.assembler.MAX_PREVIEW_BYTES
