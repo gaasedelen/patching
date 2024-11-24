@@ -10,7 +10,6 @@ import ida_name
 import ida_bytes
 import ida_lines
 import ida_idaapi
-import ida_struct
 import ida_kernwin
 import ida_segment
 
@@ -35,6 +34,8 @@ class IDPHooks(ida_idp.IDP_Hooks):
 
 class IDBHooks(ida_idp.IDB_Hooks):
     def auto_empty_finally(self):
+        pass
+    def byte_patched(self, ea, value):
         pass
 
 #------------------------------------------------------------------------------
@@ -153,6 +154,13 @@ def attach_submenu_to_popup(popup_handle, submenu_name, prev_action_name):
     """
     if not QT_AVAILABLE:
         return None
+
+    # 
+    # convert IDA alt shortcut syntax to whatever they use in Qt Text menus
+    # eg: '~A~ssemble patches to...' --> '&Assemble patches to...'
+    #
+
+    prev_action_name = re.sub(r'~(.)~', r'&\1', prev_action_name)
 
     # cast an IDA 'popup handle' pointer back to a QMenu object
     p_qmenu = ctypes.cast(int(popup_handle), ctypes.POINTER(ctypes.c_void_p))[0]
@@ -301,6 +309,9 @@ def resolve_symbol(from_ea, name):
     'multiple' potential values)
     """
 
+    # XXX: deferred import to avoid breaking patching.reload() dev helper
+    import idc
+
     #
     # first, we will attempt to parse the given symbol as a global
     # struct path.
@@ -339,26 +350,23 @@ def resolve_symbol(from_ea, name):
 
             # get the struct info for the resolved global address
             sid = ida_nalt.get_strid(global_ea)
-            sptr = ida_struct.get_struc(sid)
-
-            #
-            # walk through the rest of the struct path to compute the offset (and
-            # final address) of the referenced field eg. global.foo.bar
-            #
 
             offset = 0
-            while struct_path and sptr != None:
-
+            while struct_path and sid != -1:
                 member_name, sep, struct_path = struct_path.partition('.')
-                member = ida_struct.get_member_by_name(sptr, member_name)
+                member_offset = idc.get_member_offset(sid, member_name)
 
-                if member is None:
+                if member_offset == -1:
                     print(" - INVALID STRUCT MEMBER!", member_name)
                     break
 
-                offset += member.get_soff()
-                sptr = ida_struct.get_sptr(member)
-                if not sptr:
+                offset += member_offset
+                sid = idc.get_member_strid(sid, member_offset)
+
+                # The idc.get_member_strid function in IDA 9.0 beta has a bug.
+                # Even if a member is not a structure, it does not return -1.
+                # Therefore, it's necessary to use struct_path to determine whether the retrieval is complete.
+                if not struct_path or sid == -1:
                     assert not('.' in struct_path), 'Expected end of struct path?'
                     yield (global_ea+offset, name)
                     resolved_paths += 1
@@ -817,7 +825,49 @@ def read_range_selection(ctx):
         # return the range of selected lines
         return (True, start_ea, end_ea)
 
-    # normal IDA view
+    # special tweak for IDA disassembly views
+    elif ida_kernwin.get_widget_type(ctx.widget) == ida_kernwin.BWN_DISASM:
+        
+        # no active selection in the patching view, nothing to do...
+        if not(ctx.cur_flags & ida_kernwin.ACF_HAS_SELECTION):
+            return (False, ida_idaapi.BADADDR, ida_idaapi.BADADDR)
+
+        # extract the start/end cursor locations within the IDA disas view
+        p0 = ida_kernwin.twinpos_t()
+        p1 = ida_kernwin.twinpos_t()
+
+        #
+        # this is where we do a special override such that a user can select a
+        # few characters on a single instruction / line .. and we will return
+        # the 'range' of just that single instruction
+        #
+        # with a few characters selected / highlighted, IDA will return True
+        # to the read_selection() call below
+        #
+
+        if ida_kernwin.read_selection(ctx.widget, p0, p1):
+            start_ea = p0.at.toea()
+            end_ea = p1.at.toea()
+
+            #
+            # if the start and end address are the same with a successful
+            # selection read, that means the user's selection is on a single
+            # line / instruction
+            #
+            # we will calculate an appropriate 'end_ea' ourselves to capture
+            # the length of the entire instruction and return this as our own
+            # custom / mini range selection
+            #
+            # this facilitates the ability for users to revert individual
+            # instructions within a patch by selecting a few characters of
+            # the instruction in question
+            #
+
+            if start_ea == end_ea:
+                end_ea = ida_bytes.get_item_end(end_ea)
+                return (True, start_ea, end_ea)
+
+    # any other IDA widget / viewer
     return ida_kernwin.read_range_selection(ctx.widget)
 
 def remove_ida_actions(popup):

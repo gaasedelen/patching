@@ -26,6 +26,22 @@ try:
 except:
     SUPPORTED_IDA = False
 
+#
+# XXX/NOTE: older versions of IDA have compatability issues with newer
+# versions of Python. if the user is running IDA 8.2 or below and Python 3.11
+# or above, we will not proceed with installation.
+#
+#   https://hex-rays.com/products/ida/news/8_2sp1/
+#   https://github.com/gaasedelen/patching/issues/10
+#   https://github.com/gaasedelen/patching/issues/16
+#   ...
+#
+
+if SUPPORTED_IDA and ida_pro.IDA_SDK_VERSION < 830:
+    SUPPORTED_PYTHON = sys.version_info[0] == 3 and sys.version_info[1] < 11
+    if not SUPPORTED_PYTHON:
+        print("[i] IDA 8.2 and below do not support Python 3.11 and above")
+
 # is this deemed to be a compatible environment for the plugin to load?
 SUPPORTED_ENVIRONMENT = bool(SUPPORTED_IDA and SUPPORTED_PYTHON)
 

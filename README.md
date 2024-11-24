@@ -12,11 +12,14 @@ Special thanks to [Hex-Rays](https://hex-rays.com/) for supporting the developme
 
 ## Releases
 
+* v0.2 -- Important bugfixes, IDA 9 compatibility
 * v0.1 -- Initial release
 
 # Installation
 
 This plugin requires IDA 7.6 and Python 3. It supports Windows, Linux, and macOS.
+
+*Please note, older versions of IDA (8.2 and below) are [not compatible](https://hex-rays.com/products/ida/news/8_2sp1/) with Python 3.11 and above.*
 
 ## Easy Install
 

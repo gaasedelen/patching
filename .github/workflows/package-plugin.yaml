@@ -6,10 +6,10 @@ jobs:
   package:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
 
     - name: Download workflow artifact
-      uses: dawidd6/action-download-artifact@v2.16.0
+      uses: dawidd6/action-download-artifact@v6
       with:
 
         # the target repo for external artifacts (built libs)
@@ -27,10 +27,10 @@ jobs:
       shell: bash
       run: |
         mkdir dist && cd dist
-        mkdir win32 && cp -r ../plugins/* ./win32/ && cp -r ../artifact/keystone_win32/* ./win32/patching/keystone && cd ./win32 && zip -r ../patching_win32.zip ./* && cd ..
-        mkdir linux && cp -r ../plugins/* ./linux/ && cp -r ../artifact/keystone_linux/* ./linux/patching/keystone && cd ./linux && zip -r ../patching_linux.zip ./* && cd ..
-        mkdir darwin && cp -r ../plugins/* ./darwin/ && cp -r ../artifact/keystone_darwin/* ./darwin/patching/keystone && cd ./darwin && zip -r ../patching_macos.zip ./* && cd ..
+        mkdir win32 && cp -r ../plugins/* ./win32/ && cp -r ../artifact_windows-latest/* ./win32/patching/keystone && cd ./win32 && zip -r ../patching_win32.zip ./* && cd ..
+        mkdir linux && cp -r ../plugins/* ./linux/ && cp -r ../artifact_ubuntu-latest/* ./linux/patching/keystone && cd ./linux && zip -r ../patching_linux.zip ./* && cd ..
+        mkdir darwin && cp -r ../plugins/* ./darwin/ && cp -r ../artifact_macos-latest/* ./darwin/patching/keystone && cd ./darwin && zip -r ../patching_macos.zip ./* && cd ..
 
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v4
       with:
          path: ${{ github.workspace }}/dist/*.zip

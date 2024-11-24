@@ -37,9 +37,9 @@ from patching.util.python import register_callback, notify_callback
 class PatchingCore(object):
 
     PLUGIN_NAME    = 'Patching'
-    PLUGIN_VERSION = '0.1.2'
+    PLUGIN_VERSION = '0.2.0'
     PLUGIN_AUTHORS = 'Markus Gaasedelen'
-    PLUGIN_DATE    = '2022'
+    PLUGIN_DATE    = '2024'
 
     def __init__(self, defer_load=False):
 
@@ -54,18 +54,10 @@ class PatchingCore(object):
 
         # IDA 'Database' Hooks
         self._idb_hooks = IDBHooks()
-        self._idb_hooks.auto_empty_finally = self.load
-
-        #
-        # the plugin only uses IDB hooks for IDA Batch mode. specifically, it
-        # will load the plugin when the initial auto analysis has finished
-        #
-        # TODO: does auto_empty_finally trigger if you are loading a
-        # pre-existing IDB in IDA batch mode? (probably not, hence TODO)
-        #
-
         if ida_kernwin.cvar.batch:
-            self._idb_hooks.hook()
+            self._idb_hooks.auto_empty_finally = self.load
+        self._idb_hooks.byte_patched = self._ida_byte_patched
+        self._idb_hooks.hook()
 
         # the backing engine to assemble instructions for the plugin
         self.assembler = None
@@ -88,6 +80,7 @@ class PatchingCore(object):
 
         # plugin events / callbacks
         self._patches_changed_callbacks = []
+        self._refresh_timer = None
 
         #
         # defer fully loading the plugin core until the IDB and UI itself
@@ -115,15 +108,6 @@ class PatchingCore(object):
         Load the plugin core.
         """
 
-        #
-        # IDB hooks are *only* ever used to load the patching plugin after
-        # initial auto-analysis completes in batch mode. so we should always
-        # unhook them here as they will not be used for anything else
-        #
-
-        if ida_kernwin.cvar.batch:
-            self._idb_hooks.unhook()
-
         # attempt to initialize an assembler engine matching the database
         self._init_assembler()
 
@@ -140,7 +124,6 @@ class PatchingCore(object):
         self._init_actions()
         self._idp_hooks.hook()
         self._refresh_patches()
-        ida_kernwin.refresh_idaview_anyway()
 
         print("[%s] Loaded v%s - (c) %s - %s" % (self.PLUGIN_NAME, self.PLUGIN_VERSION, self.PLUGIN_AUTHORS, self.PLUGIN_DATE))
 
@@ -158,6 +141,11 @@ class PatchingCore(object):
 
         print("[%s] Unloading v%s..." % (self.PLUGIN_NAME, self.PLUGIN_VERSION))
 
+        if self._refresh_timer:
+            ida_kernwin.unregister_timer(self._refresh_timer)
+            self._refresh_timer = None
+
+        self._idb_hooks.unhook()
         self._idp_hooks.unhook()
         self._ui_hooks.unhook()
         self._unregister_actions()
@@ -167,13 +155,12 @@ class PatchingCore(object):
         """
         Initialize the assembly engine to be used for patching.
         """
-        inf = ida_idaapi.get_inf_structure()
-        arch_name = inf.procname.lower()
+        arch_name = ida_ida.inf_get_procname()
 
         if arch_name == 'metapc':
-            assembler = AsmX86(inf)
-        elif arch_name.startswith('arm'):
-            assembler = AsmARM(inf)
+            assembler = AsmX86()
+        elif arch_name.startswith('arm') or arch_name.startswith('ARM'):
+            assembler = AsmARM()
 
         #
         # TODO: disabled until v0.2.0
@@ -479,8 +466,15 @@ class PatchingCore(object):
                 self.nop_range(next_address, next_address+fill_size)
                 ida_auto.auto_make_code(next_address)
 
-        # write the actual patch data to the database
+        #
+        # write the actual patch data to the database. we also unhook the IDB
+        # events to prevent the plugin from seeing the numerous 'patch' events
+        # that IDA will generate as we write the patch data to the database
+        #
+
+        self._idb_hooks.unhook()
         ida_bytes.patch_bytes(ea, patch_data)
+        self._idb_hooks.hook()
 
         #
         # record the region of patched addresses
@@ -741,6 +735,14 @@ class PatchingCore(object):
         self.patched_addresses = addresses
         ida_kernwin.execute_sync(self._notify_patches_changed, ida_kernwin.MFF_NOWAIT|ida_kernwin.MFF_WRITE)
 
+    def __deferred_refresh_callback(self):
+        """
+        A deferred callback to refresh the list of patched addresses.
+        """
+        self._refresh_timer = None
+        self._refresh_patches()
+        return -1 # unregisters the timer
+
     #--------------------------------------------------------------------------
     # Plugin Events
     #--------------------------------------------------------------------------
@@ -773,6 +775,9 @@ class PatchingCore(object):
         #
 
         notify_callback(self._patches_changed_callbacks)
+
+        # ensure the IDA views are refreshed so highlights are updated
+        ida_kernwin.refresh_idaview_anyway()
 
         # for execute_sync(...)
         return 1
@@ -941,21 +946,87 @@ class PatchingCore(object):
         IDA is drawing disassembly lines and requesting highlighting info.
         """
 
+        # if there are no patches, there is nothing to highlight
+        if not self.patched_addresses:
+            return
+
         # ignore line highlight events that are not for a disassembly view
         if ida_kernwin.get_widget_type(widget) != ida_kernwin.BWN_DISASM:
             return
+
+        # cache item heads that have been checked for patches
+        ignore_item_ea = set()
+        highlight_item_ea = set()
 
         # highlight lines/addresses that have been patched by the user
         for section_lines in rin.sections_lines:
             for line in section_lines:
                 line_ea = line.at.toea()
+
+                #
+                # fast path to ignore entire items that have not been patched
+                # but may span multiple lines in the disassembly view
+                #
+
+                item_head = ida_bytes.get_item_head(line_ea)
+                if item_head in ignore_item_ea:
+                    continue
+
+                #
+                # this is a fast-path to avoid having to re-check an entire
+                # item if the current line address has already been checked
+                # and determined to contain an applied patch.
+                #
+
+                if line_ea in highlight_item_ea:
+
+                    # highlight the line if it is patched in some way
+                    e = ida_kernwin.line_rendering_output_entry_t(line)
+                    e.bg_color = ida_kernwin.CK_EXTRA2
+                    e.flags = ida_kernwin.LROEF_FULL_LINE
+
+                    # save the highlight to the output line highlight list
+                    out.entries.push_back(e)
+                    continue
+
+                #
+                # for lines of IDA disas that normally have a small number of
+                # backing bytes (such as an instruction or simple data item)
+                # we explode it out to its individual addresses and use sets
+                # to check if any bytes within it have been patched
+                #
+                # this scales well to an infinite number of patched bytes
+                #
+
                 item_len = ida_bytes.get_item_size(line_ea)
+                end_ea = line_ea + item_len
 
-                # explode a line / instruction into individual addresses
-                line_addresses = set(range(line_ea, line_ea+item_len))
+                if item_len <= 256:
+                    line_addresses = set(range(line_ea, end_ea))
+                    if not(line_addresses & self.patched_addresses):
+                        ignore_item_ea.add(line_ea)
+                        continue
 
-                # if no patched bytes correspond to this line / instruction
-                if not(line_addresses & self.patched_addresses):
+                #
+                # for lines with items that are reportedly quite 'large' (maybe
+                # a struct, array, alignment directive, etc.) where a line may
+                # contribute to an item that's tens of thousands of bytes...
+                #
+                # we will instead loop through all of the patched addresses
+                # to see if any of them fall within the range of the line.
+                #
+                # it seems unlikely that the user will ever have very many
+                # patched bytes (maybe hundreds?) versus generating a large
+                # set and checking potentially tens of thousands of addresses
+                # that make up an item, like the above condition would
+                #
+                # NOTE: this was a added during a slight re-factor of this
+                # function / logic to help minimize the chance of notable lag
+                # when scrolling past large data structures in the disas view
+                #
+
+                elif not any(line_ea <= ea < end_ea for ea in self.patched_addresses):
+                    ignore_item_ea.add(line_ea)
                     continue
 
                 # highlight the line if it is patched in some way
@@ -965,6 +1036,7 @@ class PatchingCore(object):
 
                 # save the highlight to the output line highlight list
                 out.entries.push_back(e)
+                highlight_item_ea.add(line_ea)
 
     def _ida_undo_occurred(self, action_name, is_undo):
         """
@@ -979,6 +1051,27 @@ class PatchingCore(object):
 
         self._refresh_patches()
         return 0
+    
+    def _ida_byte_patched(self, ea, old_value):
+        """
+        IDA is reporting a byte has been patched.
+        """
+
+        #
+        # if a timer already exists, unregister it so that we can register a
+        # new one. this is to effectively resest the timer as patched bytes
+        # are coming in 'rapidly' (eg. externally scripted patches, etc)
+        #
+
+        if self._refresh_timer:
+            ida_kernwin.unregister_timer(self._refresh_timer)
+        
+        #
+        # register a timer to wait 200ms before doing a full reset of the
+        # patched addresses. this is to help 'batch' the changes
+        #
+
+        self._refresh_timer = ida_kernwin.register_timer(200, self.__deferred_refresh_callback)
 
     #--------------------------------------------------------------------------
     # Temp / DEV / Tests
@@ -1058,6 +1151,9 @@ class PatchingCore(object):
         fail_addrs = collections.defaultdict(list)
         fail_bytes = collections.defaultdict(set)
         alternates = set()
+
+        # unhook so the plugin doesn't try to handle a billion 'patch' events
+        self._idb_hooks.unhook()
 
         for ea in all_instruction_addresses(start):
 
@@ -1181,6 +1277,9 @@ class PatchingCore(object):
             print(" - IDA: %s\n - ASM: %s" % (disas_hex, asm_hex))
             #break
 
+        # re-hook the to re-enable the plugin's ability to see patch events
+        self._idb_hooks.hook()
+
         print("-"*50)
         print("RESULTS")
         print("-"*50)
@@ -1202,7 +1301,7 @@ class PatchingCore(object):
             print("-"*50)
             print("(KNOWN) Unsupported Mnemonics")
             print("-"*50)
-            
+
             for mnem, hits in unsupported_map.items():
                 print(" - %s - hits %u" % (mnem.ljust(10), hits))
 
@@ -1213,8 +1312,7 @@ class PatchingCore(object):
 
         percent_truncated = percent[:percent.index('.')+3] # truncate! don't round this float...
 
-        inf = ida_idaapi.get_inf_structure()
-        arch_name = inf.procname.lower()
+        arch_name = ida_ida.inf_get_procname()
 
         total_failed = total - good
         unknown_fails = total_failed - unsupported
