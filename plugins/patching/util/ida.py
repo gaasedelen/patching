@@ -94,9 +94,14 @@ def apply_patches(filepath):
         def visitor(ea, file_offset, original_value, patched_value):
 
             # the patched byte does not have a know file address
-            if file_offset == ida_idaapi.BADADDR:
-                print("%08X: has no file mapping (original: %02X patched: %02X)...skipping...\n" % (ea, original_value, patched_value))
-                return 0
+            if file_offset == -1:
+                fpos = ea - ida_nalt.get_imagebase()
+                if fpos > 0:
+                    print(f"Manually calculated file_offset: {hex(fpos)}")
+                    file_offset=fpos
+                else:
+                    print("%08X: has no file mapping (original: %02X patched: %02X)...skipping...\n" % (ea, original_value, patched_value))
+                    return 0
 
             # seek to the patch location
             f.seek(file_offset)
