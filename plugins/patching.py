@@ -22,8 +22,8 @@ SUPPORTED_PYTHON = sys.version_info[0] == 3
 
 # this plugin requires IDA 7.6 or newer
 try:
+    import idaapi
     import ida_pro
-    import ida_idaapi
     IDA_GLOBAL_SCOPE = sys.modules['__main__']
     SUPPORTED_IDA = ida_pro.IDA_SDK_VERSION >= 760
 except:
@@ -48,7 +48,7 @@ def PLUGIN_ENTRY():
     """
     return PatchingPlugin()
 
-class PatchingPlugin(ida_idaapi.plugin_t):
+class PatchingPlugin(idaapi.plugin_t):
     """
     The IDA Patching plugin stub.
     """
@@ -60,7 +60,7 @@ class PatchingPlugin(ida_idaapi.plugin_t):
     # - PLUGIN_UNL:  Unload the plugin after calling run()
     #
 
-    flags = ida_idaapi.PLUGIN_PROC | ida_idaapi.PLUGIN_HIDE | ida_idaapi.PLUGIN_UNL
+    flags = idaapi.PLUGIN_PROC | idaapi.PLUGIN_HIDE | idaapi.PLUGIN_UNL
     comment = "A plugin to enable binary patching in IDA"
     help = ""
     wanted_name = "Patching"
@@ -78,7 +78,7 @@ class PatchingPlugin(ida_idaapi.plugin_t):
         This is called by IDA when it is loading the plugin.
         """
         if not SUPPORTED_ENVIRONMENT or self.__updated:
-            return ida_idaapi.PLUGIN_SKIP
+            return idaapi.PLUGIN_SKIP
 
         # load the plugin core
         self.core = patching.PatchingCore(defer_load=True)
@@ -86,8 +86,16 @@ class PatchingPlugin(ida_idaapi.plugin_t):
         # inject a reference to the plugin context into the IDA console scope
         IDA_GLOBAL_SCOPE.patching = self
 
+        addon = idaapi.addon_info_t()
+        addon.id = "github.gaasedelen.patching"
+        addon.name = "Patching"
+        addon.producer = "Markus Gaasedelen"
+        addon.url = "https://github.com/gaasedelen/patching"
+        addon.version = "0.3.0.0"
+        idaapi.register_addon(addon)
+
         # mark the plugin as loaded
-        return ida_idaapi.PLUGIN_KEEP
+        return idaapi.PLUGIN_KEEP
 
     def run(self, arg):
         """

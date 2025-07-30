@@ -5,23 +5,44 @@
 
 QT_AVAILABLE = False
 
-# attempt to load PyQt5
-try:
-    import PyQt5.QtGui as QtGui
-    import PyQt5.QtCore as QtCore
-    import PyQt5.QtWidgets as QtWidgets
-    from PyQt5 import sip
+import ida_pro
 
-    # importing PyQt5 went okay, let's see if we're in an IDA Qt context
+if ida_pro.IDA_SDK_VERSION >= 920:
+    # attempt to load PySide6
     try:
-        import ida_kernwin
-        QT_AVAILABLE = ida_kernwin.is_idaq()
+        import PySide6.QtGui as QtGui
+        import PySide6.QtCore as QtCore
+        import PySide6.QtWidgets as QtWidgets
+        import shiboken6
+
+        # importing PySide6 went okay, let's see if we're in an IDA Qt context
+        try:
+            import ida_kernwin
+            QT_AVAILABLE = ida_kernwin.is_idaq()
+        except ImportError:
+            pass
+
+    # import failed, PySide6 is not available
     except ImportError:
         pass
+else:
+    # attempt to load PyQt5
+    try:
+        import PyQt5.QtGui as QtGui
+        import PyQt5.QtCore as QtCore
+        import PyQt5.QtWidgets as QtWidgets
+        from PyQt5 import sip
 
-# import failed, PyQt5 is not available
-except ImportError:
-    pass
+        # importing PyQt5 went okay, let's see if we're in an IDA Qt context
+        try:
+            import ida_kernwin
+            QT_AVAILABLE = ida_kernwin.is_idaq()
+        except ImportError:
+            pass
+
+    # import failed, PyQt5 is not available
+    except ImportError:
+        pass
 
 #--------------------------------------------------------------------------
 # Qt Misc Helpers

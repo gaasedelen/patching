@@ -1,0 +1,12 @@
+{
+  "IDAMetadataDescriptorVersion": 1,
+  "plugin": {
+    "name": "Patching",
+    "entryPoint": "patching.py",
+    "categories": ["api-scripting-and-automation"],
+    "logoPath": "logo.png",
+    "idaVersions": ">=7.6",
+    "description" : "Interactive Binary Patching for IDA Pro",
+    "version": "0.3.0"
+  }
+}
