@@ -156,24 +156,31 @@ class PatchingCore(object):
         Initialize the assembly engine to be used for patching.
         """
         arch_name = ida_ida.inf_get_procname()
+        proc = (arch_name or '').lower()
 
-        if arch_name == 'metapc':
+        if proc == 'metapc':
             assembler = AsmX86()
-        elif arch_name.startswith('arm') or arch_name.startswith('ARM'):
+
+        elif proc.startswith('arm') or proc.startswith('aarch64'):
             assembler = AsmARM()
 
-        #
-        # TODO: disabled until v0.2.0
-        #
-        #elif arch_name.startswith("ppc"):
-        #    assembler = AsmPPC(inf)
-        #elif arch_name.startswith("mips"):
-        #    assembler = AsmMIPS(inf)
-        #elif arch_name.startswith("sparc"):
-        #    assembler = AsmSPARC(inf)
-        #elif arch_name.startswith("systemz") or arch_name.startswith("s390x"):
-        #    assembler = AsmSystemZ(inf)
-        #
+        elif proc.startswith('ppc') or proc.startswith('powerpc'):
+            assembler = AsmPPC()
+
+        elif proc.startswith('mips'):
+            assembler = AsmMIPS()
+
+        elif proc.startswith('sparc'):
+            assembler = AsmSPARC()
+
+        elif proc.startswith('systemz') or proc.startswith('s390') or proc.startswith('s390x'):
+            assembler = AsmSystemZ()
+
+        elif proc.startswith('hexagon'):
+            assembler = AsmHexagon()
+
+        elif proc.startswith('evm'):
+            assembler = AsmEVM()
 
         else:
             assembler = None
@@ -181,23 +188,28 @@ class PatchingCore(object):
 
         self.assembler = assembler
 
+
     def _unload_assembler(self):
         """
         Unload the assembly engine.
         """
+        if not self.assembler:
+            return
 
-        #
-        # NOTE: this is kind of aggressive attempt at deleting the assembler
-        # and Keystone components in an effort to keep things safe if the user
-        # is trying to do an easy install (updating) over the existing plugin
-        #
-        # read the install.py script (easy install) for a bit more context of
-        # why we're trying to minimize exposure to Keystone on unload
-        #
+        if hasattr(self.assembler, "_ks_thumb"):
+            try:
+                del self.assembler._ks_thumb
+            except Exception:
+                pass
 
-        del self.assembler._ks
+        try:
+            del self.assembler._ks
+        except Exception:
+            pass
+
         del self.assembler
         self.assembler = None
+
 
     def _init_actions(self):
         """

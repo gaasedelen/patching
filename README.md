@@ -114,8 +114,6 @@ While it is 'easy' to revert bytes back to their original value, it can be 'hard
 
 Time and motivation permitting, future work may include:
 
-* Enable the remaining major architectures supported by Keystone:
-  * PPC32 / PPC64 / MIPS32 / MIPS64 / SPARC / SystemZ
 * Multi instruction assembly (eg. `xor eax, eax; ret;`)
 * Multi line assembly (eg. shellcode / asm labels)
 * Interactive byte / data / string editing
