@@ -8,7 +8,11 @@ from patching.util.qt import QT_AVAILABLE
 from patching.util.ida import parse_disassembly_components, scrape_symbols
 from patching.util.python import hexdump
 
-if QT_AVAILABLE:
+# IDA 9.1 ships Python-version-matched PyQt bindings. The dockable UI is safe
+# once its Python objects are retained for the complete native widget lifetime.
+USE_LEGACY_QT_UI = QT_AVAILABLE
+
+if USE_LEGACY_QT_UI:
     from patching.ui.preview_ui import PatchingDockable
 
 LAST_LINE_IDX = -1
@@ -49,9 +53,99 @@ class PatchingController(object):
         self.core.patches_changed(self.refresh)
 
         # only create the UI for the patching dialog as needed
-        if QT_AVAILABLE:
+        if USE_LEGACY_QT_UI:
             self.view = PatchingDockable(self)
-            self.view.Show()
+            if not self.view.Show():
+                self.view = None
+
+    def interactive(self):
+        """Run the Python 3.11+ compatible assembly dialog."""
+        while True:
+            prompt = "Assemble instruction at 0x%X" % self.address
+            assembly_text = ida_kernwin.ask_str(self.assembly_text, 0, prompt)
+            if assembly_text is None:
+                return False
+
+            self.edit_assembly(assembly_text)
+            if not self.assembly_bytes:
+                ida_kernwin.warning(
+                    "Unable to assemble instruction:\n%s\n\n%s" %
+                    (assembly_text, self.status_message or "Unknown assembler error")
+                )
+                continue
+
+            old_size = ida_bytes.get_item_size(self.address)
+            old_bytes = ida_bytes.get_bytes(self.address, old_size) or b''
+            new_hex = ' '.join('%02X' % byte for byte in self.assembly_bytes)
+            old_hex = ' '.join('%02X' % byte for byte in old_bytes)
+
+            overwrite_warning = ''
+            if len(self.assembly_bytes) > old_size:
+                overwrite_warning = (
+                    "\n\nWarning: the new instruction is %u byte(s) larger "
+                    "and will overwrite following bytes." %
+                    (len(self.assembly_bytes) - old_size)
+                )
+
+            answer = ida_kernwin.ask_yn(
+                ida_kernwin.ASKBTN_YES,
+                "Patch 0x%X?\n\nOld: %s\nNew: %s%s" %
+                (self.address, old_hex, new_hex, overwrite_warning)
+            )
+            if answer == ida_kernwin.ASKBTN_CANCEL:
+                return False
+            if answer == ida_kernwin.ASKBTN_NO:
+                continue
+
+            self.commit_assembly()
+            return True
+
+    def close(self):
+        """Release references held across the native PluginForm lifetime."""
+        self.view = None
+        if getattr(self.core, '_active_patching_controller', None) is self:
+            self.core._active_patching_controller = None
+
+    def navigate(self, ea):
+        """Move an existing patching window to a new IDA address."""
+        if ea == ida_idaapi.BADADDR:
+            return False
+
+        origin = ida_bytes.get_item_head(ea)
+        if origin == ida_idaapi.BADADDR:
+            return False
+
+        self._address_origin = origin
+        self.address = origin
+        self.address_idx = LAST_LINE_IDX
+        self._refresh_lines()
+
+        insn, _ = self.get_insn_lineno(origin)
+        if not insn:
+            return False
+
+        self.select_address(origin)
+
+        if self.view:
+            twidget = getattr(self.view, '_twidget', None)
+
+            #
+            # IDA 9.1 can pass a PyCapsule (not a SWIG TWidget*) to
+            # PluginForm.OnCreate() in some environments. activate_widget()
+            # requires a real SWIG TWidget*, so only call it when we have one.
+            # find_widget() returns the canonical SWIG TWidget* by caption.
+            #
+            if not (twidget and type(twidget).__name__ == 'SwigPyObject'):
+                twidget = ida_kernwin.find_widget(PatchingController.WINDOW_TITLE)
+
+            if twidget:
+                try:
+                    ida_kernwin.activate_widget(twidget, True)
+                except TypeError:
+                    pass
+            self.view._line_assembly.setFocus()
+
+        return True
 
     #-------------------------------------------------------------------------
     # Actions

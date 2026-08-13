@@ -82,6 +82,11 @@ class PatchingCore(object):
         self._patches_changed_callbacks = []
         self._refresh_timer = None
 
+        # Strongly retain the active dockable controller until OnClose.
+        # IDAPython's native PluginForm callbacks otherwise outlive a local
+        # Python reference under Python 3.11 and can dereference freed state.
+        self._active_patching_controller = None
+
         #
         # defer fully loading the plugin core until the IDB and UI itself
         # is settled. in this case, self.load() will be called later on
@@ -930,7 +935,9 @@ class PatchingCore(object):
         # preferred location in the right click context menu
         #
 
-        self._patching_submenu = attach_submenu_to_popup(popup, "Patching", PREV_ACTION)
+        # Let IDA create the popup submenu from the official action path API.
+        # The old positioning hack dereferenced a native QMenu via ctypes/sip.
+        self._patching_submenu = None
 
         # extended list of 'less common' actions saved under a patching submenu
         ida_kernwin.attach_action_to_popup(widget, popup, "PatchByte", "Patching/")
