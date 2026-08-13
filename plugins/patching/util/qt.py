@@ -24,6 +24,31 @@ except ImportError:
     pass
 
 #--------------------------------------------------------------------------
+# IDA Qt5 Widget Conversion
+#--------------------------------------------------------------------------
+
+def twidget_to_qwidget(twidget):
+    """Wrap an IDA Qt5 TWidget with PyQt5, never PySide6/Qt6.
+
+    IDA 9.1's generic TWidgetToQtPythonWidget prefers PySide6 when it is
+    installed in the selected Python environment. IDA itself uses Qt5, so
+    wrapping that pointer as a Qt6 QWidget causes an access violation.
+    """
+    import ctypes
+
+    if type(twidget).__name__ == 'SwigPyObject':
+        address = int(twidget)
+    else:
+        get_pointer = ctypes.pythonapi.PyCapsule_GetPointer
+        get_pointer.restype = ctypes.c_void_p
+        get_pointer.argtypes = [ctypes.py_object, ctypes.c_char_p]
+        address = get_pointer(twidget, b'$valid$')
+
+    if not address:
+        raise RuntimeError("IDA returned an invalid TWidget pointer")
+
+    return sip.wrapinstance(int(address), QtWidgets.QWidget)
+#--------------------------------------------------------------------------
 # Qt Misc Helpers
 #--------------------------------------------------------------------------
 

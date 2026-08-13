@@ -112,19 +112,38 @@ class AssembleAction(ida_kernwin.action_handler_t):
     ICON = 'assemble.png'
     TEXT = "~A~ssemble..."
     TOOLTIP = "Assemble new instructions at the selected address"
-    HOTKEY = None
+    HOTKEY = 'Ctrl-Shift-A'
 
     def __init__(self, core):
         ida_kernwin.action_handler_t.__init__(self)
         self.core = core
 
     def activate(self, ctx):
+        target_ea = get_current_ea(ctx)
+        widget = ida_kernwin.find_widget(PatchingController.WINDOW_TITLE)
+        controller = getattr(self.core, '_active_patching_controller', None)
 
-        # do not create a new patching dialog if one is already active
-        if ida_kernwin.find_widget(PatchingController.WINDOW_TITLE):
+        # Reuse the open window and retarget it to the instruction that
+        # triggered Assemble instead of silently ignoring the action.
+        if widget and controller and controller.view:
+            controller.navigate(target_ea)
+            return 1
+        elif widget:
+            ida_kernwin.activate_widget(widget, True)
             return 1
 
-        wid = PatchingController(self.core, get_current_ea(ctx))
+        controller = PatchingController(self.core, target_ea)
+
+        # Keep a strong reference for as long as IDA owns the native form.
+        # Without this, Python 3.11 can collect the controller/view cycle while
+        # IDA still holds callback pointers into it.
+        self.core._active_patching_controller = controller
+
+        # Retain the native IDA dialog as a safe fallback if Qt is unavailable
+        # or PluginForm creation fails.
+        if controller.view is None:
+            controller.interactive()
+            controller.close()
 
         # return 1 to refresh the IDA views
         return 1
